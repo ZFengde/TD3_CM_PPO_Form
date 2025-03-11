@@ -201,19 +201,18 @@ class Consistency_Model:
         distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
         distance_ratio = distance/distance_target
 
-        advantages = self.advantages(critic=critic, actor=model, state=state, action=x_start) # batch, 1
-        ppo_loss_1 = advantages * distance_ratio 
-        ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)
-        ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean()
-        
         snrs = self.get_snr(t) # sigmas**-2
         weights = get_weightings(self.weight_schedule, snrs, self.sigma_data) # lambda(t_n), get different weights based on snrs: snrs + 1.0 / sigma_data**-2
-        # the smaller t, the bigger weight
-        consistency_diffs = (distiller - distiller_target) ** 2 # get the consistency difference
-        consistency_loss = mean_flat(consistency_diffs) * weights # weighted average as loss
 
+        advantages, action_std_mean = self.advantages(critic=critic, actor=model, state=state, action=x_start) # batch, 1
+        ppo_loss_1 = advantages * distance_ratio 
+        ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)
+        # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)* weights).mean()
+        ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean() - action_std_mean
+        
+        # TODO, add an entropy loss here to encourage the exploration
+        
         terms = {}
-        terms["consistency_loss"] = consistency_loss
         terms["bounded_cm_loss"] = ppo_loss
 
         return terms
@@ -269,4 +268,5 @@ class Consistency_Model:
         value = q_value.mean(1) # should be batch * 1
         q_selected_action = critic.q1_forward(state, action)
         advantage = q_selected_action - value
-        return advantage
+        action_std_mean = th.std(scaled_action)
+        return advantage, action_std_mean

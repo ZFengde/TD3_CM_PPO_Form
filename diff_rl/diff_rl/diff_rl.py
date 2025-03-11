@@ -104,6 +104,7 @@ class TD3(OffPolicyAlgorithm):
 
         # Default initial value of ent_coef when learned
         init_value = 1.0
+        self.max_grad_norm =0.5
 
         # as discussed in https://github.com/rail-berkeley/softlearning/issues/37
         self.log_huber_coef = th.log(th.ones(1, device=self.device) * init_value).requires_grad_(True)
@@ -217,6 +218,7 @@ class TD3(OffPolicyAlgorithm):
                 # Optimize the actor
                 self.actor.optimizer.zero_grad()
                 actor_loss.backward()
+                th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                 self.actor.optimizer.step()
 
                 polyak_update(self.critic.parameters(), self.critic_target.parameters(), self.tau)
