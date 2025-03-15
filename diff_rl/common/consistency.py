@@ -197,8 +197,14 @@ class Consistency_Model:
         distiller_target = target_denoise_fn(x_t2, t2, state) # predicted target based on t2=t_n
         distiller_target = distiller_target.detach()
         
+        # TODO, when the distance is small, the ratio is very likely to become large
+        # TODO, maybe change this part to Normalized Euclidean distance
         distance = th.norm(distiller - x_start, dim=1, keepdim=True)
         distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
+
+        c = 0.2 
+        distance = distance + c - th.tanh(distance)
+        distance_target = distance_target + c - th.tanh(distance_target)
         distance_ratio = distance/distance_target
 
         snrs = self.get_snr(t) # sigmas**-2
@@ -208,8 +214,8 @@ class Consistency_Model:
         ppo_loss_1 = advantages * distance_ratio 
         ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)
         # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)* weights).mean()
-        ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean() - action_std_mean
-        
+        # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean() - action_std_mean
+        ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean()
         # TODO, add an entropy loss here to encourage the exploration
         
         terms = {}
@@ -265,8 +271,9 @@ class Consistency_Model:
         state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=50, dim=1)
         scaled_action = self.batch_multi_sample(model=actor, state=state_rpt)
         q_value = critic.q1_batch_forward(state_rpt, scaled_action)
-        value = q_value.mean(1) # should be batch * 1
+        value = q_value.mean(1) # TODO, consider if introduce their prob here
         q_selected_action = critic.q1_forward(state, action)
-        advantage = q_selected_action - value
+        # advantage = q_selected_action - value
+        advantage = - value
         action_std_mean = th.std(scaled_action)
         return advantage, action_std_mean

@@ -199,7 +199,7 @@ class TD3(OffPolicyAlgorithm):
 
                 compute_bc_losses = functools.partial(self.consistency_model.bounded_cm_losses,
                                               model=self.actor,
-                                              x_start=replay_data.actions.detach(),
+                                              x_start=replay_data.actions,
                                               num_scales=40,
                                               target_model=self.actor_target,
                                               state=replay_data.observations,
