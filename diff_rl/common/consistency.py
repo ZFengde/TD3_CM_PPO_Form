@@ -159,7 +159,7 @@ class Consistency_Model:
         target_model=None,
         noise=None,
         critic=None,
-        clip_range=0.3
+        clip_range=0.5
     ):
         noise = th.randn_like(x_start) # make this noise a \nabla[Q(s, a)]
         dims = x_start.ndim
@@ -211,11 +211,11 @@ class Consistency_Model:
         weights = get_weightings(self.weight_schedule, snrs, self.sigma_data) # lambda(t_n), get different weights based on snrs: snrs + 1.0 / sigma_data**-2
 
         advantages, action_std_mean = self.advantages(critic=critic, actor=model, state=state, action=x_start) # batch, 1
-        ppo_loss_1 = advantages * distance_ratio 
-        ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)
-        # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)* weights).mean()
-        # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean() - action_std_mean
-        ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean()
+        ppo_loss_1 = advantages * distance_ratio
+        ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)  # 关键修改
+
+        ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean()
+
         # TODO, add an entropy loss here to encourage the exploration, or use the same regularized distance as above 
         # outlier_value = distance_to_mean / action_std
         
@@ -274,6 +274,6 @@ class Consistency_Model:
         q_value = critic.q1_batch_forward(state_rpt, scaled_action)
         value = q_value.mean(1) # TODO, consider if introduce their prob here
         q_selected_action = critic.q1_forward(state, action)
-        advantage = q_selected_action - value
+        advantage = q_selected_action - value # to make CM get closer to x_start when A>0, and vice versa 
         action_std_mean = th.std(scaled_action)
         return advantage, action_std_mean
