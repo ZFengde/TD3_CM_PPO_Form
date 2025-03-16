@@ -159,7 +159,7 @@ class Consistency_Model:
         target_model=None,
         noise=None,
         critic=None,
-        clip_range=0.2
+        clip_range=0.3
     ):
         noise = th.randn_like(x_start) # make this noise a \nabla[Q(s, a)]
         dims = x_start.ndim
@@ -202,7 +202,7 @@ class Consistency_Model:
         distance = th.norm(distiller - x_start, dim=1, keepdim=True)
         distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
 
-        c = 0.2 
+        c = 0.1 
         distance = distance + c - th.tanh(distance)
         distance_target = distance_target + c - th.tanh(distance_target)
         distance_ratio = distance/distance_target
