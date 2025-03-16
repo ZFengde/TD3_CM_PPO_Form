@@ -216,7 +216,8 @@ class Consistency_Model:
         # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)* weights).mean()
         # ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean() - action_std_mean
         ppo_loss = (th.min(ppo_loss_1, ppo_loss_2)).mean()
-        # TODO, add an entropy loss here to encourage the exploration
+        # TODO, add an entropy loss here to encourage the exploration, or use the same regularized distance as above 
+        # outlier_value = distance_to_mean / action_std
         
         terms = {}
         terms["bounded_cm_loss"] = ppo_loss
@@ -273,7 +274,6 @@ class Consistency_Model:
         q_value = critic.q1_batch_forward(state_rpt, scaled_action)
         value = q_value.mean(1) # TODO, consider if introduce their prob here
         q_selected_action = critic.q1_forward(state, action)
-        # advantage = q_selected_action - value
-        advantage = - value
+        advantage = q_selected_action - value
         action_std_mean = th.std(scaled_action)
         return advantage, action_std_mean
