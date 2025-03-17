@@ -197,7 +197,7 @@ class Consistency_Model:
         distiller_target = target_denoise_fn(x_t2, t2, state) # predicted target based on t2=t_n
         distiller_target = distiller_target.detach()
         
-        distance = th.norm(distiller - x_start, dim=1, keepdim=True)
+        distance = th.norm(distiller - x_start, dim=1, keepdim=True) 
         distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
         distance_ratio = distance/distance_target
 
@@ -267,6 +267,7 @@ class Consistency_Model:
         scaled_action = self.batch_multi_sample(model=actor, state=state_rpt)
         q_value = critic.q1_batch_forward(state_rpt, scaled_action)
         value = q_value.mean(1) # should be batch * 1
+        value_std = q_value.std(1) # should be batch * 1
         q_selected_action = critic.q1_forward(state, action)
-        advantage = q_selected_action - value
+        advantage = (q_selected_action - value)/(value_std + 0.01)
         return advantage
