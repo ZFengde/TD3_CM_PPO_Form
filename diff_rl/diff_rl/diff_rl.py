@@ -218,7 +218,6 @@ class TD3(OffPolicyAlgorithm):
                 # Optimize the actor
                 self.actor.optimizer.zero_grad()
                 actor_loss.backward()
-                th.nn.utils.clip_grad_norm_(self.policy.parameters(), self.max_grad_norm)
                 self.actor.optimizer.step()
 
                 polyak_update(self.critic.parameters(), self.critic_target.parameters(), self.tau)

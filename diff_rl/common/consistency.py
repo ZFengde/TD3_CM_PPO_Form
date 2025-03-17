@@ -203,8 +203,8 @@ class Consistency_Model:
         distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
 
         c = 0.05
-        distance = distance + c - th.tanh(distance)
-        distance_target = distance_target + c - th.tanh(distance_target)
+        # distance = distance + c - th.tanh(distance)
+        # distance_target = distance_target + c - th.tanh(distance_target)
         distance_ratio = distance/distance_target
 
         snrs = self.get_snr(t) # sigmas**-2
@@ -214,6 +214,9 @@ class Consistency_Model:
         ppo_loss_1 = advantages.detach() * distance_ratio
         ppo_loss_2 = advantages.detach() * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)  # 关键修改
 
+        # TODO, only learn those when A>0
+        # this loss make ratio to be small, which means if A > 0, then make the generated action to get close to the x_start
+        # and vice versa 
         ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean() - values.mean()
 
         # TODO, add an entropy loss here to encourage the exploration, or use the same regularized distance as above 
