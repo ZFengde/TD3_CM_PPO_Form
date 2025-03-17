@@ -210,11 +210,11 @@ class Consistency_Model:
         snrs = self.get_snr(t) # sigmas**-2
         weights = get_weightings(self.weight_schedule, snrs, self.sigma_data) # lambda(t_n), get different weights based on snrs: snrs + 1.0 / sigma_data**-2
 
-        advantages, action_std_mean = self.advantages(critic=critic, actor=model, state=state, action=x_start) # batch, 1
-        ppo_loss_1 = advantages * distance_ratio
-        ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)  # 关键修改
+        advantages, values = self.advantages_values(critic=critic, actor=model, state=state, action=x_start) # batch, 1
+        ppo_loss_1 = advantages.detach() * distance_ratio
+        ppo_loss_2 = advantages.detach() * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)  # 关键修改
 
-        ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean()
+        ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean() - values.mean()
 
         # TODO, add an entropy loss here to encourage the exploration, or use the same regularized distance as above 
         # outlier_value = distance_to_mean / action_std
@@ -268,12 +268,11 @@ class Consistency_Model:
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
         return x_0
     
-    def advantages(self, critic, actor, state, action):
+    def advantages_values(self, critic, actor, state, action):
         state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=50, dim=1)
         scaled_action = self.batch_multi_sample(model=actor, state=state_rpt)
         q_value = critic.q1_batch_forward(state_rpt, scaled_action)
         value = q_value.mean(1) # TODO, consider if introduce their prob here
         q_selected_action = critic.q1_forward(state, action)
         advantage = q_selected_action - value # to make CM get closer to x_start when A>0, and vice versa 
-        action_std_mean = th.std(scaled_action)
-        return advantage, action_std_mean
+        return advantage, value
