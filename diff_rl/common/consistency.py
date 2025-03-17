@@ -197,32 +197,23 @@ class Consistency_Model:
         distiller_target = target_denoise_fn(x_t2, t2, state) # predicted target based on t2=t_n
         distiller_target = distiller_target.detach()
         
-        # TODO, when the distance is small, the ratio is very likely to become large
-        # TODO, maybe change this part to Normalized Euclidean distance
         distance = th.norm(distiller - x_start, dim=1, keepdim=True)
         distance_target = th.norm(distiller_target - x_start, dim=1, keepdim=True)
-
-        c = 0.05
-        # distance = distance + c - th.tanh(distance)
-        # distance_target = distance_target + c - th.tanh(distance_target)
         distance_ratio = distance/distance_target
 
+        advantages = self.advantages(critic=critic, actor=model, state=state, action=x_start) # batch, 1
+        ppo_loss_1 = advantages * distance_ratio 
+        ppo_loss_2 = advantages * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)
+        ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean()
+        
         snrs = self.get_snr(t) # sigmas**-2
         weights = get_weightings(self.weight_schedule, snrs, self.sigma_data) # lambda(t_n), get different weights based on snrs: snrs + 1.0 / sigma_data**-2
+        # the smaller t, the bigger weight
+        consistency_diffs = (distiller - distiller_target) ** 2 # get the consistency difference
+        consistency_loss = mean_flat(consistency_diffs) * weights # weighted average as loss
 
-        advantages, values = self.advantages_values(critic=critic, actor=model, state=state, action=x_start) # batch, 1
-        ppo_loss_1 = advantages.detach() * distance_ratio
-        ppo_loss_2 = advantages.detach() * th.clamp(distance_ratio, 1 - clip_range, 1 + clip_range)  # 关键修改
-
-        # TODO, only learn those when A>0
-        # this loss make ratio to be small, which means if A > 0, then make the generated action to get close to the x_start
-        # and vice versa 
-        ppo_loss = th.min(ppo_loss_1, ppo_loss_2).mean() - values.mean()
-
-        # TODO, add an entropy loss here to encourage the exploration, or use the same regularized distance as above 
-        # outlier_value = distance_to_mean / action_std
-        
         terms = {}
+        terms["consistency_loss"] = consistency_loss
         terms["bounded_cm_loss"] = ppo_loss
 
         return terms
@@ -271,11 +262,11 @@ class Consistency_Model:
         x_0 = self.denoise(model, x_T, self.sigmas[0] * s_in, state)[1]
         return x_0
     
-    def advantages_values(self, critic, actor, state, action):
+    def advantages(self, critic, actor, state, action):
         state_rpt = th.repeat_interleave(state.unsqueeze(1), repeats=50, dim=1)
         scaled_action = self.batch_multi_sample(model=actor, state=state_rpt)
         q_value = critic.q1_batch_forward(state_rpt, scaled_action)
-        value = q_value.mean(1) # TODO, consider if introduce their prob here
+        value = q_value.mean(1) # should be batch * 1
         q_selected_action = critic.q1_forward(state, action)
-        advantage = q_selected_action - value # to make CM get closer to x_start when A>0, and vice versa 
-        return advantage, value
+        advantage = q_selected_action - value
+        return advantage
